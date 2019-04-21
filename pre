@@ -1,0 +1,94 @@
+# coding:utf-8
+import os
+import re
+
+'''将指定txt文件的内容按指定字符分离成dict'''
+def get_dict_from_txt(targettxt,splitwith):
+    dict1 = {}
+    price = 0.00
+    with open(targettxt,'r',encoding='utf-8-sig') as tar:
+        tarlines = tar.read().split('\n')
+        for line in tarlines:
+            if splitwith in line:
+                lines = line.split(splitwith)
+                value = []
+                if lines[0] == 'price':
+                    value = re.findall(r"\d+\.?\d*", lines[1])
+                    for nn in value:price = round(float(nn),1)
+                else:
+                    value.append(lines[1])
+                dict1[lines[0]] = value
+    return dict1,price
+
+'''将目标dict根据词表提取各自的词频和金额权重'''
+def find_kword(tardict, tarprice, wdict1):
+    cc1 = 0
+    cp1 = {}
+    kw1 = {}
+    for wk in [tardict.get('疾病'),tardict.get('希望获得的帮助')]:
+        if not (wk is None):
+            with open(wdict1, 'r', encoding='utf-8-sig') as tw1:
+                tw11 = tw1.read().split('\n')
+                for w1 in tw11:
+                    cc = 0
+                    if w1 in wk[0]:
+                        cc += wk[0].count(w1)
+                        cp1[w1] = ['词频',cc]
+                for pen in cp1.keys():
+                    cc1 += cp1[pen][1]
+                for kw in cp1.keys():
+                    kw1[kw] = [cp1[kw],['金额权重',round((tarprice/cc1)*cp1[kw][1],1)]]
+    return kw1
+
+
+'''运行测试区1。各种地址请自行更改'''
+workpath = 'D:\ZKW\\'
+dict1 = '专业名词表v2.txt'
+dict2 = '疑问词表v2.txt'
+dict3 = '医疗敏感词v2.txt'
+path1 = workpath + 'QA\contents0328-0331\\'
+path2 = workpath + 'QA\\'
+resultpath = workpath+'result\\组合词及金额结果.txt'
+
+print('-----------------\n准备开始根据词表统计组合词及金额。正式目录为：',path1,'\n测试目录为：',path2)
+ch = input('--->>请输入(1.正式运行 2.测试):')
+if ch == '1':
+    QApath = path1
+else:QApath = path2
+
+'''以下是根据QA路径抽取关键词，每个文件形成3个list套dict，组成一个大的kws，结构为{文件名:[[关键词类别1,{关键词1:[[属性1,值],[属性2,值]]}]]}
+    eg：{'content_936_1376.txt': [['专业名词表v2.txt', {'感冒': [['词频', 1], ['金额权重', 100.0]]}], ['医疗敏感词v2.txt', {'药': [['词频', 1], ['金额权重', 50.0]], '住院': [['词频', 1], ['金额权重', 50.0]]}]]}
+并从每个文件中生成关键词组合，并计算金额权重，生成为kwset=[[组合词1,累计金额],[组合词2,累计金额]]
+    eg：[['感冒+药', 150.0], ['感冒+住院', 150.0]]'''
+filenames = os.listdir(QApath)
+cc = 0
+kws = {}
+kwset = []
+for count in range(len(filenames)):
+    cc += 1
+    if cc%1000 == 0:
+        print('处理第 ' + str(cc) + ' 个文件')
+    if '.txt' in filenames[count]:
+        txtdict,txtprice = get_dict_from_txt(QApath + filenames[count],'=>')
+        kw1 = find_kword(txtdict,txtprice,workpath+'word\\'+ dict1)
+        kw3 = find_kword(txtdict, txtprice, workpath + 'word\\'+ dict3)
+
+        kws[filenames[count]] = [[dict1, kw1]]
+        kws[filenames[count]].append([dict3, kw3])
+
+    for pen in kws.keys():
+        if pen == filenames[count]:
+            for pen1 in kws[filenames[count]][0][1].keys():
+                p1 = 0
+                p1 += kws[filenames[count]][0][1][pen1][1][1]
+                for pen2 in kws[filenames[count]][1][1].keys():
+                    p2 = 0
+                    p2 += kws[filenames[count]][1][1][pen2][1][1]
+                    kwset.append([pen1 + '+' + pen2, round(p1 + p2, 0)])
+
+with open(resultpath,'w', encoding='utf-8') as result:
+    ccc = 0
+    for x in kwset:
+        ccc += 1
+        result.write(str(x[0])+' '+ str(x[1]) + '\n')
+print('合计组合词数量（不排重）：'+ str(ccc))
